@@ -27,19 +27,19 @@ def calculate_productive_hours(data, scheduled_start_time, scheduled_end_time):
 
     return productive_hours
 
-def plot_machine_utilization(scheduled_hours, productive_hours):
-    # Your plot_machine_utilization function code here
-    non_productive_hours = scheduled_hours - productive_hours
+# def plot_machine_utilization(scheduled_hours, productive_hours):
+#     # Your plot_machine_utilization function code here
+#     non_productive_hours = scheduled_hours - productive_hours
 
-    # Create a pie chart for machine utilization
-    labels = ['Productive Hours', 'Non-Productive Hours']
-    sizes = [productive_hours, non_productive_hours]
-    colors = ['green', 'red']
-    plt.figure(figsize=(8, 6))
-    plt.pie(sizes, labels=labels, colors=colors, autopct='%1.1f%%', startangle=90)
-    plt.title("Machine Utilization")
-    plt.axis('equal')  # Equal aspect ratio ensures that pie is drawn as a circle.
-    plt.show()
+#     # Create a pie chart for machine utilization
+#     labels = ['Productive Hours', 'Non-Productive Hours']
+#     sizes = [productive_hours, non_productive_hours]
+#     colors = ['green', 'red']
+#     plt.figure(figsize=(8, 6))
+#     plt.pie(sizes, labels=labels, colors=colors, autopct='%1.1f%%', startangle=90)
+#     plt.title("Machine Utilization")
+#     plt.axis('equal')  # Equal aspect ratio ensures that pie is drawn as a circle.
+#     plt.show()
 
 @router.post("/")
 async def calculate_machine_utilization(data: dict = Body(...)):
@@ -74,7 +74,7 @@ async def calculate_machine_utilization(data: dict = Body(...)):
         utilization = (productive_hours / scheduled_hours) * 100
         utilization = min(utilization, 100.0)  # Cap utilization at 100%
 
-        plot_machine_utilization(scheduled_hours, productive_hours)
+       # plot_machine_utilization(scheduled_hours, productive_hours)
 
         response_data = {
             "utilization": utilization,
