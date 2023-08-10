@@ -10,16 +10,17 @@ def connect_mongo(url, db_name):
     return db
 
 def calculate_power_usage(data, voltage):
-    # Your calculate_power_usage function code here
     current_values = [data['CT1'] for data in data] + [data['CT2'] for data in data] + [data['CT3'] for data in data]
     average_current = sum(current_values) / len(current_values)
     power_usage = average_current * voltage
     return power_usage
-    pass
 
 @router.get("/")
-async def realtime_power_usage():
+async def realtime_power_usage(mac_address: str):
     try:
+        if not mac_address:
+            raise HTTPException(status_code=400, detail="Please provide a valid MAC address.")
+
         MONGO_URL = "mongodb://AMF_DB:W*123123*M@192.168.0.103:27021"
         MONGO_DB_NAME = "test"
         db = connect_mongo(MONGO_URL, MONGO_DB_NAME)
@@ -29,7 +30,7 @@ async def realtime_power_usage():
         end_time = datetime.utcnow()
         start_time = end_time - timedelta(seconds=5)
         cursor = db['cts'].find({
-            "mac": "70:b3:d5:fe:4d:09",
+            "mac": mac_address,
             "created_at": {"$gte": start_time, "$lt": end_time}
         })
         cursor_list = list(cursor)

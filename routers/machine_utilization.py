@@ -26,7 +26,6 @@ def calculate_productive_hours(data, scheduled_start_time, scheduled_end_time):
         productive_hours = 0
 
     return productive_hours
-    pass
 
 def plot_machine_utilization(scheduled_hours, productive_hours):
     # Your plot_machine_utilization function code here
@@ -41,11 +40,14 @@ def plot_machine_utilization(scheduled_hours, productive_hours):
     plt.title("Machine Utilization")
     plt.axis('equal')  # Equal aspect ratio ensures that pie is drawn as a circle.
     plt.show()
-    pass
 
 @router.post("/")
 async def calculate_machine_utilization(data: dict = Body(...)):
     try:
+        mac_address = data.get('mac_address')
+        if not mac_address:
+            raise HTTPException(status_code=400, detail="Missing 'mac_address' in request data")
+
         MONGO_URL = "mongodb://AMF_DB:W*123123*M@192.168.0.103:27021"
         MONGO_DB_NAME = "test"
         db = connect_mongo(MONGO_URL, MONGO_DB_NAME)
@@ -56,7 +58,7 @@ async def calculate_machine_utilization(data: dict = Body(...)):
         start_time = current_time - timedelta(hours=scheduled_hours)
 
         cursor = db['cts'].find({
-            "mac": "70:b3:d5:fe:4d:09",
+            "mac": mac_address,
             "created_at": {"$gte": start_time, "$lte": current_time}
         })
 

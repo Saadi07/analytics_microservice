@@ -1,5 +1,4 @@
 from fastapi import APIRouter, HTTPException
-from fastapi.openapi.models import Info
 from datetime import datetime, timedelta
 from pymongo import MongoClient
 import pandas as pd
@@ -34,27 +33,24 @@ async def perform_load_analysis(data: dict):
         MONGO_DB_NAME = "test"
         db = connect_mongo(MONGO_URL, MONGO_DB_NAME)
 
-        hours = int(data.get('hours', 0))
-        load_threshold = float(data.get('load_threshold', 0.0))
-
-        duration = timedelta(hours=hours)
-        end_time = datetime.utcnow()
-        start_time = end_time - duration
+        mac_address = data.get('mac_address')
+        if not mac_address:
+            raise HTTPException(status_code=400, detail="Please provide a valid MAC address.")
 
         current_day = datetime.utcnow().date()
         previous_day = current_day - timedelta(days=1)
 
         current_day_start = datetime.combine(current_day, datetime.min.time())
-        current_day_end = current_day_start + timedelta(days=1)
+        current_day_end = datetime.utcnow()
         previous_day_start = datetime.combine(previous_day, datetime.min.time())
         previous_day_end = previous_day_start + timedelta(days=1)
 
         cursor_current = db['cts'].find({
-            "mac": "70:b3:d5:fe:4d:09",
+            "mac": mac_address,
             "created_at": {"$gte": current_day_start, "$lt": current_day_end}
         })
         cursor_previous = db['cts'].find({
-            "mac": "70:b3:d5:fe:4d:09",
+            "mac": mac_address,
             "created_at": {"$gte": previous_day_start, "$lt": previous_day_end}
         })
 

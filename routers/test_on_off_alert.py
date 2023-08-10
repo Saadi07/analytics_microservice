@@ -17,9 +17,9 @@ def connect_mongo(url, db_name):
     db = client[db_name]
     return db
 
-def get_data_for_day(db, current_day_start, current_day_end):
+def get_data_for_day(db, mac_address, current_day_start, current_day_end):
     cursor_current = db['cts'].find({
-        "mac": "70:b3:d5:fe:4d:09",
+        "mac": mac_address,
         "created_at": {"$gte": current_day_start, "$lt": current_day_end}
     })
 
@@ -34,6 +34,10 @@ async def check_machine_status(data: dict):
         MONGO_DB_NAME = "test"
         db = connect_mongo(MONGO_URL, MONGO_DB_NAME)
 
+        mac_address = data.get('mac_address')
+        if not mac_address:
+            raise HTTPException(status_code=400, detail="Please provide a valid MAC address.")
+
         num_days = int(data.get('num_days', 0))
         current_date = datetime.utcnow().date()
 
@@ -44,7 +48,7 @@ async def check_machine_status(data: dict):
             current_day_start = datetime.combine(current_date, datetime.min.time())
             current_day_end = current_day_start + timedelta(days=1)
 
-            data_current = get_data_for_day(db, current_day_start, current_day_end)
+            data_current = get_data_for_day(db, mac_address, current_day_start, current_day_end)
             average_current = calculate_average_current(data_current)
 
             off_timestamps = data_current[(data_current[['CT1', 'CT2', 'CT3']] == 0).any(axis=1) | (average_current == 0)]['created_at']

@@ -1,10 +1,10 @@
 import os
 from fastapi import FastAPI
-from routers import items, users, fault_detection, bill_calculation, machine_utilization, max_consumption_day, monitor_power_usage, test_current_load_threshold, test_on_off_alert, two_days_comparison
+from routers import fault_detection, bill_calculation, machine_utilization, max_consumption_day, monitor_power_usage, test_current_load_threshold, test_on_off_alert, two_days_comparison
 from fastapi.openapi.models import Info
 
 app = FastAPI()
-port = int(os.environ.get("PORT", 8000))
+port = int(os.environ.get("PORT", 8001))
 
 app = FastAPI(
     title="My FastAPI App",
@@ -21,8 +21,6 @@ app = FastAPI(
 def home():
     return {"message": "Welcome to the app!"}
 
-app.include_router(items.router, prefix='/items', tags=['items'])
-app.include_router(users.router, prefix='/users', tags=['users'])
 app.include_router(fault_detection.router, prefix='/fault-detection', tags=['fault-detection'])
 app.include_router(bill_calculation.router, prefix='/bill-calculation', tags=['bill-calculation'])
 app.include_router(machine_utilization.router, prefix='/machine-utilization', tags=['machine-utilization'])
@@ -34,4 +32,4 @@ app.include_router(two_days_comparison.router, prefix='/two-days-comparison', ta
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    uvicorn.run(app, host="127.0.0.1", port=port)

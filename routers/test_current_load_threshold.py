@@ -21,24 +21,21 @@ def calculate_power_usage(current_data, voltage, num_entries):
         if i + 1 >= num_entries:
             break
     return power_usage
-    pass
 
 def connect_mongo(url, db_name):
     client = MongoClient(url)
     db = client[db_name]
     return db
 
-def get_historical_data(db, start_time, end_time):
-    # Your get_historical_data function code here
+def get_historical_data(db, mac_address, start_time, end_time):
     cursor = db['cts'].find({
-        "mac": "70:b3:d5:fe:4d:09",
+        "mac": mac_address,
         "created_at": {"$gte": start_time, "$lte": end_time}
     })
 
     data = pd.DataFrame(list(cursor))
     data['created_at'] = pd.to_datetime(data['created_at'])
     return data
-    pass
 
 @router.post("/")
 async def perform_load_analysis(data: dict = Body(...)):
@@ -47,13 +44,17 @@ async def perform_load_analysis(data: dict = Body(...)):
         MONGO_DB_NAME = "test"
         db = connect_mongo(MONGO_URL, MONGO_DB_NAME)
 
+        mac_address = data.get('mac_address')
+        if not mac_address:
+            raise HTTPException(status_code=400, detail="Please provide a valid MAC address.")
+
         hours = int(data.get('hours', 0))
         load_threshold = float(data.get('load_threshold', 0.0))
 
         duration = timedelta(hours=hours)
         end_time = datetime.utcnow()
         start_time = end_time - duration
-        data = get_historical_data(db, start_time, end_time)
+        data = get_historical_data(db, mac_address, start_time, end_time)
 
         voltage = 220  # Voltage in Volts
         num_entries = hours * 60 * 60 // 5

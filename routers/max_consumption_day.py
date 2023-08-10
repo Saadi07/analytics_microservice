@@ -21,11 +21,14 @@ def calculate_average_power_consumed(data, voltage):
     power_phase3 = current_phase3 * voltage
     average_power = (power_phase1 + power_phase2 + power_phase3) / 3
     return average_power
-    pass
 
 @router.post("/")
 async def calculate_max_consumption_day(data: dict = Body(...)):
     try:
+        mac_address = data.get('mac_address')
+        if not mac_address:
+            raise HTTPException(status_code=400, detail="Missing 'mac_address' in request data")
+
         MONGO_URL = "mongodb://AMF_DB:W*123123*M@192.168.0.103:27021"
         MONGO_DB_NAME = "test"
         db = connect_mongo(MONGO_URL, MONGO_DB_NAME)
@@ -36,7 +39,7 @@ async def calculate_max_consumption_day(data: dict = Body(...)):
         start_time = end_time - timedelta(days=days)
 
         cursor = db['cts'].find({
-            "mac": "70:b3:d5:fe:4d:09",
+            "mac": mac_address,
             "created_at": {"$gte": start_time, "$lte": end_time}
         })
 

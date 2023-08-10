@@ -18,7 +18,6 @@ def calculate_average_power(data, voltage):
     average_power_phase3 = np.mean(data['CT3']) * voltage
     average_power = (average_power_phase1 + average_power_phase2 + average_power_phase3) / 3
     return average_power
-    pass
 
 def generate_alert(day, average_power, threshold):
     # Your generate_alert function code here
@@ -26,17 +25,19 @@ def generate_alert(day, average_power, threshold):
         return True
     else:
         return False
-    pass
 
 def calculate_bill(units, unit_cost):
     # Your calculate_bill function code here
     total_cost = units * unit_cost
     return total_cost
-    pass
 
 @router.post("/")
 async def calculate_power_analysis(data: dict = Body(...)):
     try:
+        mac_address = data.get('mac_address')
+        if not mac_address:
+            raise HTTPException(status_code=400, detail="Missing 'mac_address' in request data")
+
         MONGO_URL = "mongodb://AMF_DB:W*123123*M@192.168.0.103:27021"
         MONGO_DB_NAME = "test"
 
@@ -50,7 +51,7 @@ async def calculate_power_analysis(data: dict = Body(...)):
         start_time = current_time - timedelta(days=days)
 
         cursor = db['cts'].find({
-            "mac": "70:b3:d5:fe:4d:09",
+            "mac": mac_address,
             "created_at": {"$gte": start_time, "$lte": current_time}
         })
 
