@@ -1,5 +1,4 @@
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
-from pymongo import MongoClient
 from datetime import datetime, timedelta
 from .database import connect_mongo
 import asyncio

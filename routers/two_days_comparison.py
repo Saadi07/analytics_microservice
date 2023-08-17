@@ -1,6 +1,5 @@
 from fastapi import APIRouter, HTTPException
 from datetime import datetime, timedelta
-from pymongo import MongoClient
 import pandas as pd
 from .database import connect_mongo
 

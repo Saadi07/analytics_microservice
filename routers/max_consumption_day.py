@@ -1,8 +1,6 @@
 from fastapi import APIRouter, HTTPException, Body
-from pymongo import MongoClient
 import pandas as pd
 from datetime import datetime, timedelta
-import matplotlib.pyplot as plt
 import numpy as np;
 from .database import connect_mongo
 

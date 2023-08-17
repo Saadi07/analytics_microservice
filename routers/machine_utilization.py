@@ -1,8 +1,6 @@
 from fastapi import APIRouter, HTTPException, Body
-from pymongo import MongoClient
 from datetime import datetime, timedelta
 import pandas as pd
-import matplotlib.pyplot as plt
 from .database import connect_mongo
 
 router = APIRouter()
@@ -23,20 +21,6 @@ def calculate_productive_hours(data, scheduled_start_time, scheduled_end_time):
         productive_hours = 0
 
     return productive_hours
-
-def plot_machine_utilization(scheduled_hours, productive_hours):
-    # Your plot_machine_utilization function code here
-    non_productive_hours = scheduled_hours - productive_hours
-
-    # Create a pie chart for machine utilization
-    labels = ['Productive Hours', 'Non-Productive Hours']
-    sizes = [productive_hours, non_productive_hours]
-    colors = ['green', 'red']
-    plt.figure(figsize=(8, 6))
-    plt.pie(sizes, labels=labels, colors=colors, autopct='%1.1f%%', startangle=90)
-    plt.title("Machine Utilization")
-    plt.axis('equal')  # Equal aspect ratio ensures that pie is drawn as a circle.
-    plt.show()
 
 @router.post("/")
 async def calculate_machine_utilization(data: dict = Body(...)):
