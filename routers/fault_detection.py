@@ -1,6 +1,7 @@
-from fastapi import APIRouter, HTTPException, Body
-from pymongo import MongoClient
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException
 from datetime import datetime, timedelta
+import json
+import asyncio
 from .database import connect_mongo
 
 router = APIRouter()
@@ -37,12 +38,17 @@ def detect_fault(average_current, fault_threshold):
         return True, timestamp
     return False, None
 
-@router.post("/")
-async def start_fault_detection(data: dict = Body(...)):
+@router.websocket("/ws/fault-detection")
+async def start_fault_detection(websocket: WebSocket):
+    await websocket.accept()
+    db = connect_mongo()
     try:
-        db = connect_mongo()
-        
+        # Receive initial data from the client
+        data = await websocket.receive_text()
+        data = json.loads(data)
         mac_address = data.get('mac_address')
+        fault_threshold = data.get('fault_threshold')
+
         if not mac_address:
             raise HTTPException(status_code=400, detail="Missing 'mac_address' in request data")
         
@@ -51,30 +57,32 @@ async def start_fault_detection(data: dict = Body(...)):
         })
         phase = node_document['ct']['phase']
 
-        fault_threshold = data.get('fault_threshold')
-        
-        cursor = db['cts'].find({
-            "mac": mac_address,
-            "created_at": {"$gte": datetime.utcnow() - timedelta(seconds=5)}
-        })
+        while True:
+            cursor = db['cts'].find({
+                "mac": mac_address,
+                "created_at": {"$gte": datetime.utcnow() - timedelta(seconds=5)}
+            })
 
-        current_data = list(cursor)
+            current_data = list(cursor)
 
-        average_current = calculate_average(current_data, phase)  # Using the calculated phase
+            average_current = calculate_average(current_data, phase)
 
-        is_fault, timestamp = detect_fault(average_current, fault_threshold)
-        if is_fault:
-            response = {
-                "results": f"Fault detected at {timestamp}: Average Current: {average_current} Amps"
-            }
-            return response
-        else:
-            response = {
-                "results": "No Fault Detected!"
-            }
-            return response
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+            is_fault, timestamp = detect_fault(average_current, fault_threshold)
+            if is_fault:
+                response = {
+                    "results": f"Fault detected at {timestamp}: Average Current: {average_current} Amps"
+                }
+            else:
+                response = {
+                    "results": "No Fault Detected!"
+                }
+
+            await websocket.send_json(response)
+
+            await asyncio.sleep(5)  # Send data every 5 seconds
+
+    except WebSocketDisconnect:
+        print("Disconnected!")
 
 
 """ Realtime data  """
