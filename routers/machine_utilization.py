@@ -3,13 +3,10 @@ from pymongo import MongoClient
 from datetime import datetime, timedelta
 import pandas as pd
 import matplotlib.pyplot as plt
+from .database import connect_mongo
 
 router = APIRouter()
 
-def connect_mongo(url, db_name):
-    client = MongoClient(url)
-    db = client[db_name]
-    return db
 
 def calculate_productive_hours(data, scheduled_start_time, scheduled_end_time):
     # Your calculate_productive_hours function code here
@@ -27,30 +24,33 @@ def calculate_productive_hours(data, scheduled_start_time, scheduled_end_time):
 
     return productive_hours
 
-# def plot_machine_utilization(scheduled_hours, productive_hours):
-#     # Your plot_machine_utilization function code here
-#     non_productive_hours = scheduled_hours - productive_hours
+def plot_machine_utilization(scheduled_hours, productive_hours):
+    # Your plot_machine_utilization function code here
+    non_productive_hours = scheduled_hours - productive_hours
 
-#     # Create a pie chart for machine utilization
-#     labels = ['Productive Hours', 'Non-Productive Hours']
-#     sizes = [productive_hours, non_productive_hours]
-#     colors = ['green', 'red']
-#     plt.figure(figsize=(8, 6))
-#     plt.pie(sizes, labels=labels, colors=colors, autopct='%1.1f%%', startangle=90)
-#     plt.title("Machine Utilization")
-#     plt.axis('equal')  # Equal aspect ratio ensures that pie is drawn as a circle.
-#     plt.show()
+    # Create a pie chart for machine utilization
+    labels = ['Productive Hours', 'Non-Productive Hours']
+    sizes = [productive_hours, non_productive_hours]
+    colors = ['green', 'red']
+    plt.figure(figsize=(8, 6))
+    plt.pie(sizes, labels=labels, colors=colors, autopct='%1.1f%%', startangle=90)
+    plt.title("Machine Utilization")
+    plt.axis('equal')  # Equal aspect ratio ensures that pie is drawn as a circle.
+    plt.show()
 
 @router.post("/")
 async def calculate_machine_utilization(data: dict = Body(...)):
     try:
+        db = connect_mongo()
+        
         mac_address = data.get('mac_address')
         if not mac_address:
             raise HTTPException(status_code=400, detail="Missing 'mac_address' in request data")
-
-        MONGO_URL = "mongodb://AMF_DB:W*123123*M@192.168.0.103:27021"
-        MONGO_DB_NAME = "test"
-        db = connect_mongo(MONGO_URL, MONGO_DB_NAME)
+        
+        node_document = db['nodes'].find_one({
+            "mac": mac_address
+        })
+        phase = node_document['ct']['phase']
 
         scheduled_hours = int(data.get('scheduled_hours'))
 
@@ -66,9 +66,15 @@ async def calculate_machine_utilization(data: dict = Body(...)):
         data['created_at'] = pd.to_datetime(data['created_at'])
 
         # Calculate average current for CT1, CT2, and CT3 for each hour
-        data['average_current'] = (data['CT1'] + data['CT2'] + data['CT3']) / 3
-        data['average_current'] = data['average_current'].fillna(0)
+        if phase == 1:
+            data['average_current'] = data['CT1']
+        elif phase == 3:
+            data['average_current'] = (data['CT1'] + data['CT2'] + data['CT3']) / 3
+        else:
+            raise ValueError("Invalid phase value. Supported values are 1 and 3.")
 
+        data['average_current'] = data['average_current'].fillna(0)
+        
         productive_hours = calculate_productive_hours(data, start_time, current_time)
 
         utilization = (productive_hours / scheduled_hours) * 100
@@ -86,3 +92,6 @@ async def calculate_machine_utilization(data: dict = Body(...)):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+""" Included pie chart """

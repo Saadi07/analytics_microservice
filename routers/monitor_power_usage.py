@@ -1,16 +1,18 @@
 from fastapi import APIRouter, HTTPException
 from pymongo import MongoClient
 from datetime import datetime, timedelta
+from .database import connect_mongo
 
 router = APIRouter()
 
-def connect_mongo(url, db_name):
-    client = MongoClient(url)
-    db = client[db_name]
-    return db
-
-def calculate_power_usage(data, voltage):
-    current_values = [data['CT1'] for data in data] + [data['CT2'] for data in data] + [data['CT3'] for data in data]
+def calculate_power_usage(data, voltage, phase):
+    if phase == 1:
+        current_values = [entry['CT1'] for entry in data]
+    elif phase == 3:
+        current_values = [(entry['CT1'] + entry['CT2'] + entry['CT3']) / 3 for entry in data]
+    else:
+        raise ValueError("Invalid phase value. Supported values are 1 and 3.")
+    
     average_current = sum(current_values) / len(current_values)
     power_usage = average_current * voltage
     return power_usage
@@ -18,12 +20,15 @@ def calculate_power_usage(data, voltage):
 @router.get("/")
 async def realtime_power_usage(mac_address: str):
     try:
+        db = connect_mongo()
+
         if not mac_address:
             raise HTTPException(status_code=400, detail="Please provide a valid MAC address.")
-
-        MONGO_URL = "mongodb://AMF_DB:W*123123*M@192.168.0.103:27021"
-        MONGO_DB_NAME = "test"
-        db = connect_mongo(MONGO_URL, MONGO_DB_NAME)
+        
+        node_document = db['nodes'].find_one({
+            "mac": mac_address
+        })
+        phase = node_document['ct']['phase']
 
         voltage = 220  # Voltage in Volts
 
@@ -36,7 +41,7 @@ async def realtime_power_usage(mac_address: str):
         cursor_list = list(cursor)
 
         if len(cursor_list) > 0:
-            power_usage = calculate_power_usage(cursor_list, voltage)
+            power_usage = calculate_power_usage(cursor_list, voltage, phase)
 
             response_data = {
                 "timestamp": datetime.utcnow().isoformat(),
@@ -51,3 +56,6 @@ async def realtime_power_usage(mac_address: str):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+""" REaltime data and Graph Included """

@@ -3,35 +3,42 @@ from pymongo import MongoClient
 import pandas as pd
 from datetime import datetime, timedelta
 import matplotlib.pyplot as plt
+import numpy as np;
+from .database import connect_mongo
 
 router = APIRouter()
 
-def connect_mongo(url, db_name):
-    client = MongoClient(url)
-    db = client[db_name]
-    return db
-
-def calculate_average_power_consumed(data, voltage):
+def calculate_average_power_consumed(data, voltage, phase):
     # Your calculate_average_power_consumed function code here
-    current_phase1 = data['CT1']
-    current_phase2 = data['CT2']
-    current_phase3 = data['CT3']
-    power_phase1 = current_phase1 * voltage
-    power_phase2 = current_phase2 * voltage
-    power_phase3 = current_phase3 * voltage
-    average_power = (power_phase1 + power_phase2 + power_phase3) / 3
-    return average_power
+    if phase == 3:
+        print("here")
+        current_phase1 = data['CT1']
+        current_phase2 = data['CT2']
+        current_phase3 = data['CT3']
+        power_phase1 = current_phase1 * voltage
+        power_phase2 = current_phase2 * voltage
+        power_phase3 = current_phase3 * voltage
+        average_power = (power_phase1 + power_phase2 + power_phase3) / 3
+        return average_power
+    elif phase == 1:
+        average_power_phase1 = np.mean(data['CT1']) * voltage
+        return average_power_phase1
+    else:
+        raise ValueError("Invalid phase value. Supported values are 1 and 3.")
+        
 
 @router.post("/")
 async def calculate_max_consumption_day(data: dict = Body(...)):
     try:
+        db = connect_mongo()
+        
         mac_address = data.get('mac_address')
         if not mac_address:
             raise HTTPException(status_code=400, detail="Missing 'mac_address' in request data")
-
-        MONGO_URL = "mongodb://AMF_DB:W*123123*M@192.168.0.103:27021"
-        MONGO_DB_NAME = "test"
-        db = connect_mongo(MONGO_URL, MONGO_DB_NAME)
+        node_document = db['nodes'].find_one({
+            "mac": mac_address
+        })
+        phase = node_document['ct']['phase']
 
         days = int(data.get('days', 0))
 
@@ -47,7 +54,7 @@ async def calculate_max_consumption_day(data: dict = Body(...)):
         data['created_at'] = pd.to_datetime(data['created_at'])
 
         voltage = 220  # Voltage in Volts
-        data['power_consumed'] = calculate_average_power_consumed(data, voltage)
+        data['power_consumed'] = calculate_average_power_consumed(data, voltage, phase)
 
         daily_average_power = data.groupby(data['created_at'].dt.date)['power_consumed'].mean()
 
@@ -64,3 +71,6 @@ async def calculate_max_consumption_day(data: dict = Body(...)):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+""" Graph Include """

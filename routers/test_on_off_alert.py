@@ -3,19 +3,23 @@ from fastapi.openapi.models import Info
 from datetime import datetime, timedelta
 from pymongo import MongoClient
 import pandas as pd
+from .database import connect_mongo
 
 router = APIRouter()
 
-def calculate_average_current(data):
+def calculate_average_current(data, phase):
     if data.empty:
         return None
-    average_current = data[['CT1', 'CT2', 'CT3']].mean(axis=1)
+    
+    if phase == 1:
+        average_current = data['CT1']
+    elif phase == 3:
+        average_current = data[['CT1', 'CT2', 'CT3']].mean(axis=1)
+    else:
+        raise ValueError("Invalid phase value. Supported values are 1 and 3.")
+    
     return average_current
 
-def connect_mongo(url, db_name):
-    client = MongoClient(url)
-    db = client[db_name]
-    return db
 
 def get_data_for_day(db, mac_address, current_day_start, current_day_end):
     cursor_current = db['cts'].find({
@@ -30,9 +34,11 @@ def get_data_for_day(db, mac_address, current_day_start, current_day_end):
 @router.post("/")
 async def check_machine_status(data: dict):
     try:
-        MONGO_URL = "mongodb://AMF_DB:W*123123*M@192.168.0.103:27021"
-        MONGO_DB_NAME = "test"
-        db = connect_mongo(MONGO_URL, MONGO_DB_NAME)
+        db = connect_mongo()
+
+        mac_address = data.get('mac_address')
+        if not mac_address:
+            raise HTTPException(status_code=400, detail="Please provide a valid MAC address.")
 
         mac_address = data.get('mac_address')
         if not mac_address:
@@ -49,7 +55,13 @@ async def check_machine_status(data: dict):
             current_day_end = current_day_start + timedelta(days=1)
 
             data_current = get_data_for_day(db, mac_address, current_day_start, current_day_end)
-            average_current = calculate_average_current(data_current)
+
+            node_document = db['nodes'].find_one({
+                "mac": mac_address
+            })
+            phase = node_document['ct']['phase']
+
+            average_current = calculate_average_current(data_current, phase)
 
             off_timestamps = data_current[(data_current[['CT1', 'CT2', 'CT3']] == 0).any(axis=1) | (average_current == 0)]['created_at']
 

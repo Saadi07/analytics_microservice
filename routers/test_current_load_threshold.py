@@ -1,31 +1,31 @@
 from fastapi import APIRouter, HTTPException, Body
 from datetime import datetime, timedelta
+import matplotlib.pyplot as plt
 import pandas as pd
 from pymongo import MongoClient
+from .database import connect_mongo
 
 router = APIRouter()
 
-def calculate_power_usage(current_data, voltage, num_entries):
-    # Your calculate_power_usage function code here
+def calculate_power_usage(current_data, voltage, num_entries, phase):
     power_usage = []
     for i, entry in enumerate(current_data):
         time = entry['created_at']
-        current_phase1 = entry['CT1']
-        current_phase2 = entry['CT2']
-        current_phase3 = entry['CT3']
-        power_phase1 = current_phase1 * voltage
-        power_phase2 = current_phase2 * voltage
-        power_phase3 = current_phase3 * voltage
-        power_average = (power_phase1 + power_phase2 + power_phase3) / 3  # Calculate average power
-        power_usage.append((time, power_average))
+        
+        if phase == 1:
+            current_phase = entry['CT1']
+        elif phase == 3:
+            current_phase = (entry['CT1'] + entry['CT2'] + entry['CT3']) / 3
+        else:
+            raise ValueError("Invalid phase value. Supported values are 1 and 3.")
+        
+        power = current_phase * voltage
+        power_usage.append((time, power))
+        
         if i + 1 >= num_entries:
             break
+    
     return power_usage
-
-def connect_mongo(url, db_name):
-    client = MongoClient(url)
-    db = client[db_name]
-    return db
 
 def get_historical_data(db, mac_address, start_time, end_time):
     cursor = db['cts'].find({
@@ -40,14 +40,17 @@ def get_historical_data(db, mac_address, start_time, end_time):
 @router.post("/")
 async def perform_load_analysis(data: dict = Body(...)):
     try:
-        MONGO_URL = "mongodb://AMF_DB:W*123123*M@192.168.0.103:27021"
-        MONGO_DB_NAME = "test"
-        db = connect_mongo(MONGO_URL, MONGO_DB_NAME)
+        db = connect_mongo()
 
         mac_address = data.get('mac_address')
         if not mac_address:
             raise HTTPException(status_code=400, detail="Please provide a valid MAC address.")
-
+        
+        node_document = db['nodes'].find_one({
+            "mac": mac_address
+        })
+        phase = node_document['ct']['phase']
+        
         hours = int(data.get('hours', 0))
         load_threshold = float(data.get('load_threshold', 0.0))
 
@@ -58,7 +61,7 @@ async def perform_load_analysis(data: dict = Body(...)):
 
         voltage = 220  # Voltage in Volts
         num_entries = hours * 60 * 60 // 5
-        power_usage = calculate_power_usage(data.to_dict('records'), voltage, num_entries)
+        power_usage = calculate_power_usage(data.to_dict('records'), voltage, num_entries, phase)
 
         exceed_threshold = [time for time, power in power_usage if power > load_threshold]
         alert_message = "Load threshold exceeded at the following times:" if exceed_threshold else "No load threshold exceeded."
@@ -73,3 +76,6 @@ async def perform_load_analysis(data: dict = Body(...)):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+""" Include line graph """

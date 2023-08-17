@@ -1,34 +1,34 @@
 from fastapi import APIRouter, HTTPException, Body
 from pymongo import MongoClient
 from datetime import datetime, timedelta
+from .database import connect_mongo
 
 router = APIRouter()
 
-def connect_mongo(url, db_name):
-    try:
-        client = MongoClient(url)
-        db = client[db_name]
-        return db
-    except Exception as e:
-        raise RuntimeError(f"Error connecting to MongoDB: {e}")
-
-def calculate_average(current_data):
-    # Your calculate_average function code here
-    ct1_sum = 0.0
-    ct2_sum = 0.0
-    ct3_sum = 0.0
+def calculate_average(current_data, phase):
+    ct_sum = 0.0
     num_entries = len(current_data)
 
-    for entry in current_data:
-        ct1_sum += entry['CT1']
-        ct2_sum += entry['CT2']
-        ct3_sum += entry['CT3']
+    if phase == 1:
+        for entry in current_data:
+            ct_sum += entry['CT1']
+        average_ct = ct_sum / num_entries
+    elif phase == 3:
+        ct1_sum = 0.0
+        ct2_sum = 0.0
+        ct3_sum = 0.0
+        for entry in current_data:
+            ct1_sum += entry['CT1']
+            ct2_sum += entry['CT2']
+            ct3_sum += entry['CT3']
+        average_ct1 = ct1_sum / num_entries
+        average_ct2 = ct2_sum / num_entries
+        average_ct3 = ct3_sum / num_entries
+        average_ct = (average_ct1 + average_ct2 + average_ct3) / 3
+    else:
+        raise ValueError("Invalid phase value. Supported values are 1 and 3.")
 
-    average_ct1 = ct1_sum / num_entries
-    average_ct2 = ct2_sum / num_entries
-    average_ct3 = ct3_sum / num_entries
-
-    return (average_ct1, average_ct2, average_ct3)
+    return average_ct
 
 def detect_fault(average_current, fault_threshold):
     # Your detect_fault function code here
@@ -40,16 +40,19 @@ def detect_fault(average_current, fault_threshold):
 @router.post("/")
 async def start_fault_detection(data: dict = Body(...)):
     try:
+        db = connect_mongo()
+        
         mac_address = data.get('mac_address')
         if not mac_address:
             raise HTTPException(status_code=400, detail="Missing 'mac_address' in request data")
-
-        MONGO_URL = "mongodb://AMF_DB:W*123123*M@192.168.0.103:27021"
-        MONGO_DB_NAME = "test"
-
-        db = connect_mongo(MONGO_URL, MONGO_DB_NAME)
+        
+        node_document = db['nodes'].find_one({
+            "mac": mac_address
+        })
+        phase = node_document['ct']['phase']
 
         fault_threshold = data.get('fault_threshold')
+        
         cursor = db['cts'].find({
             "mac": mac_address,
             "created_at": {"$gte": datetime.utcnow() - timedelta(seconds=5)}
@@ -57,9 +60,7 @@ async def start_fault_detection(data: dict = Body(...)):
 
         current_data = list(cursor)
 
-        average_ct1, average_ct2, average_ct3 = calculate_average(current_data)
-
-        average_current = (average_ct1 + average_ct2 + average_ct3) / 3
+        average_current = calculate_average(current_data, phase)  # Using the calculated phase
 
         is_fault, timestamp = detect_fault(average_current, fault_threshold)
         if is_fault:
@@ -74,3 +75,6 @@ async def start_fault_detection(data: dict = Body(...)):
             return response
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+""" Realtime data  """

@@ -2,21 +2,22 @@ from fastapi import APIRouter, HTTPException
 from datetime import datetime, timedelta
 from pymongo import MongoClient
 import pandas as pd
+from .database import connect_mongo
 
 router = APIRouter()
 
-def connect_mongo(url, db_name):
-    client = MongoClient(url)
-    db = client[db_name]
-    return db
-
-def calculate_power_consumed(data, voltage):
-    power_phase1 = data['CT1'] * voltage
-    power_phase2 = data['CT2'] * voltage
-    power_phase3 = data['CT3'] * voltage
-    total_power = power_phase1 + power_phase2 + power_phase3
+def calculate_power_consumed(data, voltage, phase):
+    if phase == 1:
+        power_phase = data['CT1'] * voltage
+    elif phase == 3:
+        power_phase = (data['CT1'] + data['CT2'] + data['CT3']) * voltage
+    else:
+        raise ValueError("Invalid phase value. Supported values are 1 and 3.")
+    
+    total_power = power_phase
     average_power = total_power.mean()
     return average_power
+
 
 def generate_alert(current_day_power, previous_day_power):
     if current_day_power > previous_day_power:
@@ -29,16 +30,20 @@ def generate_alert(current_day_power, previous_day_power):
 @router.post("/")
 async def perform_load_analysis(data: dict):
     try:
-        MONGO_URL = "mongodb://AMF_DB:W*123123*M@192.168.0.103:27021"
-        MONGO_DB_NAME = "test"
-        db = connect_mongo(MONGO_URL, MONGO_DB_NAME)
+        db = connect_mongo()
 
         mac_address = data.get('mac_address')
         if not mac_address:
             raise HTTPException(status_code=400, detail="Please provide a valid MAC address.")
+        
+        node_document = db['nodes'].find_one({
+                "mac": mac_address
+            })
+        phase = node_document['ct']['phase']
 
         current_day = datetime.utcnow().date()
         previous_day = current_day - timedelta(days=1)
+        
 
         current_day_start = datetime.combine(current_day, datetime.min.time())
         current_day_end = datetime.utcnow()
@@ -61,8 +66,8 @@ async def perform_load_analysis(data: dict):
         data_previous['created_at'] = pd.to_datetime(data_previous['created_at'])
 
         voltage = 220
-        average_power_current = calculate_power_consumed(data_current, voltage) * 1
-        average_power_previous = calculate_power_consumed(data_previous, voltage) * 1
+        average_power_current = calculate_power_consumed(data_current, voltage, phase) * 1
+        average_power_previous = calculate_power_consumed(data_previous, voltage, phase) * 1
 
         duration_current = ((current_day_end - current_day_start).total_seconds()) / 3600
         duration_previous = ((previous_day_end - previous_day_start).total_seconds()) / 3600
@@ -89,3 +94,6 @@ async def perform_load_analysis(data: dict):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+""" Realtime data for the current day also Include graph """

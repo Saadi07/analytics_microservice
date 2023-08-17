@@ -3,21 +3,24 @@ from pymongo import MongoClient
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
+from .database import connect_mongo
+
 
 router = APIRouter()
 
-def connect_mongo(url, db_name):
-    client = MongoClient(url)
-    db = client[db_name]
-    return db
+def calculate_average_power(data, voltage, phase):
+    if phase == 1:
+        average_power_phase1 = np.mean(data['CT1']) * voltage
+        return average_power_phase1
+    elif phase == 3:
+        average_power_phase1 = np.mean(data['CT1']) * voltage
+        average_power_phase2 = np.mean(data['CT2']) * voltage
+        average_power_phase3 = np.mean(data['CT3']) * voltage
+        average_power = (average_power_phase1 + average_power_phase2 + average_power_phase3) / 3
+        return average_power
+    else:
+        raise ValueError("Invalid phase value. Supported values are 1 and 3.")
 
-def calculate_average_power(data, voltage):
-    # Your calculate_average_power function code here
-    average_power_phase1 = np.mean(data['CT1']) * voltage
-    average_power_phase2 = np.mean(data['CT2']) * voltage
-    average_power_phase3 = np.mean(data['CT3']) * voltage
-    average_power = (average_power_phase1 + average_power_phase2 + average_power_phase3) / 3
-    return average_power
 
 def generate_alert(day, average_power, threshold):
     # Your generate_alert function code here
@@ -34,15 +37,16 @@ def calculate_bill(units, unit_cost):
 @router.post("/")
 async def calculate_power_analysis(data: dict = Body(...)):
     try:
+        db = connect_mongo()
         mac_address = data.get('mac_address')
         if not mac_address:
             raise HTTPException(status_code=400, detail="Missing 'mac_address' in request data")
-
-        MONGO_URL = "mongodb://AMF_DB:W*123123*M@192.168.0.103:27021"
-        MONGO_DB_NAME = "test"
-
-        db = connect_mongo(MONGO_URL, MONGO_DB_NAME)
-
+        
+        node_document = db['nodes'].find_one({
+        "mac": mac_address
+        })
+        phase = node_document['ct']['phase']
+       
         days = int(data.get('days', 0))
         unit_cost = float(data.get('unit_cost', 0.0))
         threshold = float(data.get('threshold', 0.0))
@@ -65,7 +69,7 @@ async def calculate_power_analysis(data: dict = Body(...)):
             day_start = start_time + timedelta(days=day)
             day_end = day_start + timedelta(days=1)
             daily_data = data[(data['created_at'] >= day_start) & (data['created_at'] < day_end)]
-            average_power = calculate_average_power(daily_data, voltage)
+            average_power = calculate_average_power(daily_data, voltage, phase)  # Pass phase information
             power_in_kw = average_power / 1000
             units = power_in_kw
             total_units += units
